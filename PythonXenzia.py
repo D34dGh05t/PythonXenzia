@@ -4,12 +4,13 @@ import curses
 from random import randrange
 import sys
 import time
+from curses.textpad import Textbox, rectangle
 
 def move_cursor(win, key):
 	MIN_ROW = 0
 	MIN_COL = 0
-	MAX_ROW = curses.LINES - 1
-	MAX_COL = curses.COLS - 1
+	MAX_ROW, MAX_COL = win.getmaxyx()
+	
 	row, col = win.getyx()
 
 	if key == curses.KEY_LEFT:
@@ -32,14 +33,13 @@ def move_cursor(win, key):
 	return(row, col)
 
 def generate_food(win, foodType=0):
-	food = ""
 	defaultFood = "+"
 	bonusFood = "@"
+	food = defaultFood
 	
 	MIN_ROW = 0
 	MIN_COL = 0
-	MAX_ROW = curses.LINES - 1
-	MAX_COL = curses.COLS - 1
+	MAX_ROW, MAX_COL = win.getmaxyx()
 	
 	foodX = randrange(MIN_ROW, MAX_ROW)
 	foodY = randrange(MIN_COL, MAX_COL)
@@ -47,14 +47,12 @@ def generate_food(win, foodType=0):
 	
 	if foodType:
 		food = bonusFood
-	else:
-		food = defaultFood
-	
+
 	win.addstr(foodX, foodY, food)
 	
 	return(foodLocation)
 		
-def snake(key, stdscr, snakeHeadLocation, snakeHeadLastLocation):
+def draw_snake(win, key, snakeHeadLocation, snakeHeadLastLocation):
 	snakeBody = ""
 	snakeHead = chr(0x00f7)
 	snakeBodyH = "-"
@@ -67,19 +65,18 @@ def snake(key, stdscr, snakeHeadLocation, snakeHeadLastLocation):
 	else:
 		pass
 
-	stdscr.addstr(snakeHeadLastLocation[0], snakeHeadLastLocation[1], snakeBody)
-	stdscr.addstr(snakeHeadLocation[0], snakeHeadLocation[1], snakeHead)
+	win.addstr(snakeHeadLastLocation[0], snakeHeadLastLocation[1], snakeBody)
+	win.addstr(snakeHeadLocation[0], snakeHeadLocation[1], snakeHead)
 
 	return snakeBody
 		
-def move_snake(stdscr, snakeLocation, snakeHeadLocation):
-	snakeDefaultSize = 5
-	snakeSize = len(snakeLocation)
+def move_snake(win, snakeSize, snakeLocation, snakeHeadLocation):
+	SNAKE_DEFAULT_SIZE = 5
 			
-	if(snakeSize <= snakeDefaultSize):
+	if (snakeSize <= SNAKE_DEFAULT_SIZE):
 		pass
 	else:
-		stdscr.addstr(snakeLocation[0][0], (snakeLocation[0][1]), " ")
+		win.addstr(snakeLocation[0][0], (snakeLocation[0][1]), " ")
 		del snakeLocation[0]
 	
 	snakeLocation.append(snakeHeadLocation)
@@ -92,27 +89,63 @@ def init_game(win):
 	win.move(defaultSnakePosition[0], defaultSnakePosition[1])
 	snakeHeadLastLocation = defaultSnakePosition
 
-	return(foodLocation, defaultSnakePosition, snakeHeadLastLocation)
+	return(foodLocation, snakeHeadLastLocation)
 
-def main(stdscr):
+def game_scores(score, scoretype=0):
+	MAX_COL = curses.COLS-1
+	scorePad = curses.newpad(1, MAX_COL)
+	scorePad.addstr(0, 0, "Score: ")
+	scorePad.addstr(str(score))
+	scorePad.refresh(0, 0, 0, 0, 0, int(MAX_COL/2))
+	
+	return score+1
+
+def setup_screen(debug=False):
 	curses.curs_set(False)
+	
+	MIN_ROW = 0
+	MIN_COL = 0
+	MAX_ROW = curses.LINES - 1
+	MAX_COL = curses.COLS - 1
+	
+	screens = []
+	scoreWinCoordinates = (1, MAX_COL, 0, 0)
+	gameWinCoordinates = (MAX_ROW-1, MAX_COL, 1, 0)
+	
+	if debug:
+		gameWinCoordinates = (MAX_ROW-8, MAX_COL, 1, 0)
+		debugWinCoordinates = (7, MAX_COL, MAX_ROW-7, 0)
+		debugWin = curses.newwin(*debugWinCoordinates)
+		screens.append(debugWin)
 
+	scoreWin = curses.newwin(*scoreWinCoordinates)
+	gameWin = curses.newwin(*gameWinCoordinates)
+	screens.append(scoreWin)
+	screens.append(gameWin)
+	
+	return(screens, len(screens))
+	
+def main(stdscr):
+	screens, lenScreens = setup_screen()
 	snakeLocation = []
-	foodLocation, defaultSnakePosition, snakeHeadLastLocation = init_game(stdscr)
+	foodLocation, snakeHeadLastLocation = init_game(gameWin)
 	snakeLocation.append(snakeHeadLastLocation)
+	score = 0
 	
 	while True:
-		key = stdscr.getch()
-		row, col = move_cursor(stdscr, key)
+		key = gameWin.getch()
+		gameWin.addstr(str(key))
+		row, col = move_cursor(gameWin, key)
 		snakeHeadLocation = (row, col)
-		snakeBody = snake(key, stdscr, snakeHeadLocation, snakeHeadLastLocation)
+		snakeBody = draw_snake(gameWin, key, snakeHeadLocation, snakeHeadLastLocation)
 		snakeHeadLastLocation = snakeHeadLocation
-		snakeLocation = move_snake(stdscr, snakeLocation, snakeHeadLocation)
-		stdscr.move(row, col)
-	
+		snakeLocation = move_snake(gameWin, snakeLocation, snakeHeadLocation)
+		gameWin.move(row, col)
+			
 		if(snakeHeadLocation[0] == foodLocation[0] and snakeHeadLocation[1] == foodLocation[1]):
-			foodLocation = generate_food(stdscr, 0)
-			stdscr.move(row, col)
+			score = game_scores(score, 0)
+			foodLocation = generate_food(gameWin, 0)
+			gameWin.move(row, col)
 
 if(__name__ == "__main__"):
 	curses.wrapper(main)
